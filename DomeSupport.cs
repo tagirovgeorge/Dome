@@ -21,8 +21,8 @@ namespace Dome{
         /// <summary>
         /// Initialization of Dome
         /// </summary>
-        /// <param name="apiid">Customer API-ID</param>
-        /// <param name="apikey">Customer API-KEY</param>
+        /// <param name="apiId">Customer API-ID</param>
+        /// <param name="apiKey">Customer API-KEY</param>
         /// <param name="deviceId">Client Unique Device Id</param>
         /// <param name="pushToken">Client Push Token(if enabled)</param>
         /// <exception cref="ArgumentNullException">The value of 'apiid' cannot be null. </exception>
@@ -32,9 +32,9 @@ namespace Dome{
         /// <exception cref="NotSupportedException">Security Headers setting error</exception>
         /// <exception cref="ObjectDisposedException">Could not start SignalR connection to server</exception>
         /// <exception cref="AggregateException">The <see cref="T:System.Threading.Tasks.Task" /> was canceled -or- an exception was thrown during the execution of the <see cref="T:System.Threading.Tasks.Task" />. If the task was canceled, the <see cref="T:System.AggregateException" /> contains an <see cref="T:System.OperationCanceledException" /> in its <see cref="P:System.AggregateException.InnerExceptions" /> collection.</exception>
-        public DomeSupport(string apiid, string apikey, string deviceId, string pushToken){
-            if (apiid == null) throw new ArgumentNullException("apiid");
-            if (apikey == null) throw new ArgumentNullException("apikey");
+        public DomeSupport(string apiId, string apiKey, string deviceId, string pushToken){
+            if (apiId == null) throw new ArgumentNullException("apiId");
+            if (apiKey == null) throw new ArgumentNullException("apiKey");
             if (deviceId == null) throw new ArgumentNullException("deviceId");
 
             var hubConnection = new HubConnection("https://dome.support/signalr", false){
@@ -43,8 +43,8 @@ namespace Dome{
             };
             HubProxy = hubConnection.CreateHubProxy("chat");
             try{
-                hubConnection.Headers.Add("X-DOME-APIID", apiid);
-                hubConnection.Headers.Add("X-DOME-APIKEY", apikey);
+                hubConnection.Headers.Add("X-DOME-APIID", apiId);
+                hubConnection.Headers.Add("X-DOME-APIKEY", apiKey);
             }
             catch (NotSupportedException notSupportedException){
                 throw new NotSupportedException("Security headers setting error", notSupportedException);
@@ -75,10 +75,17 @@ namespace Dome{
             });
         }
 
+        /// <summary>
+        /// Send Message to Support via SignalR 
+        /// </summary>
+        /// <param name="message">Message from Customer</param>
         public void SendMessage(string message){
             HubProxy.Invoke("MessageFromClient", DomeClientId, message);
         }
 
+        /// <summary>
+        /// Event Delegate, Triggering, when new message from Support received
+        /// </summary>
         public event Action<string> OnMessage;
     }
 }
