@@ -1,0 +1,6 @@
+H:\Google Drive\Проекты\Актуальные проекты\dome.support\Source Code\Dome\bin\Release\Dome.dll
+H:\Google Drive\Проекты\Актуальные проекты\dome.support\Source Code\Dome\bin\Release\Dome.pdb
+H:\Google Drive\Проекты\Актуальные проекты\dome.support\Source Code\Dome\bin\Release\Microsoft.AspNet.SignalR.Client.dll
+H:\Google Drive\Проекты\Актуальные проекты\dome.support\Source Code\Dome\bin\Release\Microsoft.AspNet.SignalR.Client.xml
+H:\Google Drive\Проекты\Актуальные проекты\dome.support\Source Code\Dome\obj\Release\Dome.dll
+H:\Google Drive\Проекты\Актуальные проекты\dome.support\Source Code\Dome\obj\Release\Dome.pdb
