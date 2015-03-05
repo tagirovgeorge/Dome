@@ -3,7 +3,7 @@ Welcome to Dome.
 This is .NET library of our service. 
 
 Requrements:
- - SignalR >= 2.0.0
+ - SignalR.Client >= 2.0.0
  
  Usage:
  
