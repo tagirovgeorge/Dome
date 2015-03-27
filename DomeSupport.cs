@@ -1,8 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Net;
+using System.Text;
 using Microsoft.AspNet.SignalR.Client;
+using Newtonsoft.Json;
 
 namespace Dome{
-
     /// <summary>
     /// Dome.Support .NET(C#) Library
     /// -> Using SignalR 2.2.0
@@ -14,9 +18,81 @@ namespace Dome{
         private IHubProxy HubProxy { get; set; }
 
         /// <summary>
+        /// Hub Connection 
+        /// </summary>
+        private HubConnection HubConnection { get; set; }
+
+        /// <summary>
         /// DomeClientId (Based on Device Id and Push Token)
         /// </summary>
         private string DomeClientId { get; set; }
+
+        private string ApiId { get; set; }
+
+        private string ApiKey { get; set; }
+
+        /// <summary>
+        /// API Endpoint configuration
+        /// </summary>
+        private const string DomeApiEndpoint = "https://dome.support/api";
+
+        /// <summary>
+        /// Dispose Hub Connection on class destruction
+        /// </summary>
+        ~DomeSupport(){
+            HubConnection.Stop();
+            HubConnection.Dispose();
+        }
+
+        /// <summary>
+        /// Message conversation container
+        /// </summary>
+        private List<Message> Conversation = new List<Message>();
+
+        /// <summary>
+        /// Message structure
+        /// </summary>
+        private class Message{
+            /// <summary>
+            /// Message Type
+            /// </summary>
+            public enum MessageType{
+                /// <summary>
+                /// Message was created on Client side
+                /// </summary>
+                Client,
+
+                /// <summary>
+                /// Message was created by support and sended to customer
+                /// </summary>
+                Support
+            }
+
+            /// <summary>
+            /// Message Id 
+            /// </summary>
+            public string Id { get; set; }
+
+            /// <summary>
+            /// Name ("Me" if message from Client(device), Name of support, if message from support) 
+            /// </summary>
+            public string Name { get; set; }
+
+            /// <summary>
+            /// Link to Supports avatar(if have)
+            /// </summary>
+            public string AvatarLink { get; set; }
+
+            /// <summary>
+            /// Message creation time UTC
+            /// </summary>
+            public DateTime DateTimeUtc { get; set; }
+
+            /// <summary>
+            /// Message Text
+            /// </summary>
+            public string Text { get; set; }
+        }
 
         /// <summary>
         /// Initialization of Dome
@@ -37,14 +113,19 @@ namespace Dome{
             if (apiKey == null) throw new ArgumentNullException("apiKey");
             if (deviceId == null) throw new ArgumentNullException("deviceId");
 
-            var hubConnection = new HubConnection("https://dome.support/signalr", false){
+            ApiId = apiId;
+            ApiKey = apiKey;
+
+            HubConnection = new HubConnection("https://dome.support/signalr", false){
                 TraceLevel = TraceLevels.All,
                 TraceWriter = Console.Out
             };
-            HubProxy = hubConnection.CreateHubProxy("chat");
+
+            HubProxy = HubConnection.CreateHubProxy("chat");
+
             try{
-                hubConnection.Headers.Add("X-DOME-APIID", apiId);
-                hubConnection.Headers.Add("X-DOME-APIKEY", apiKey);
+                HubConnection.Headers.Add("X-DOME-APIID", apiId);
+                HubConnection.Headers.Add("X-DOME-APIKEY", apiKey);
             }
             catch (NotSupportedException notSupportedException){
                 throw new NotSupportedException("Security headers setting error", notSupportedException);
@@ -52,7 +133,7 @@ namespace Dome{
 
             //Start SignalR connection to Hub
             try{
-                hubConnection.Start().ContinueWith(task => {
+                HubConnection.Start().ContinueWith(task => {
                     if (!task.IsFaulted) HubProxy.Invoke("HelloMyNameIs", deviceId, pushToken);
                 }).Wait();
             }
@@ -79,8 +160,24 @@ namespace Dome{
         /// Send Message to Support via SignalR 
         /// </summary>
         /// <param name="message">Message from Customer</param>
-        public void SendMessage(string message){
-            HubProxy.Invoke("MessageFromClient", DomeClientId, message);
+        public string SendMessage(string message){
+            return ApiHttpPostCall<string>("messages", new NameValueCollection{{"domeClientId", DomeClientId}, {"text", message}});
+        }
+
+        private T ApiHttpPostCall<T>(string method, NameValueCollection parameters){
+            using (var wc = new WebClient()){
+                // Set security headers for API request
+                wc.Headers.Add("X-DOME-APIID", ApiId);
+                wc.Headers.Add("X-DOME-APIKEY", ApiKey);
+
+                // Make POST request with parameters
+                var response = wc.UploadValues(string.Format("{0}/{1}", DomeApiEndpoint, method), parameters);
+                // Byte to string
+                var data = Encoding.Default.GetString(response);
+
+                // Deserialize response into class
+                return JsonConvert.DeserializeObject<T>(data);
+            }
         }
 
         /// <summary>
