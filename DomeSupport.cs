@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Linq;
 using System.Net;
 using System.Text;
+using System.Web;
 using Microsoft.AspNet.SignalR.Client;
 using Newtonsoft.Json;
 
@@ -15,21 +17,21 @@ namespace Dome{
         /// <summary>
         /// Hub Instance
         /// </summary>
-        private IHubProxy HubProxy { get; set; }
+        private IHubProxy HubProxy { get; }
 
         /// <summary>
         /// Hub Connection 
         /// </summary>
-        private HubConnection HubConnection { get; set; }
+        private HubConnection HubConnection { get; }
 
         /// <summary>
         /// DomeClientId (Based on Device Id and Push Token)
         /// </summary>
         private string DomeClientId { get; set; }
 
-        private string ApiId { get; set; }
+        private string ApiId { get; }
 
-        private string ApiKey { get; set; }
+        private string ApiKey { get; }
 
         /// <summary>
         /// API Endpoint configuration
@@ -47,51 +49,22 @@ namespace Dome{
         /// <summary>
         /// Message conversation container
         /// </summary>
-        private List<Message> Conversation = new List<Message>();
+        public List<TicketConversationLog> Conversation = new List<TicketConversationLog>();
 
-        /// <summary>
-        /// Message structure
-        /// </summary>
-        private class Message{
-            /// <summary>
-            /// Message Type
-            /// </summary>
+        public class TicketConversationLog{
             public enum MessageType{
-                /// <summary>
-                /// Message was created on Client side
-                /// </summary>
-                Client,
-
-                /// <summary>
-                /// Message was created by support and sended to customer
-                /// </summary>
-                Support
+                FromUser,
+                FromOperator
             }
 
-            /// <summary>
-            /// Message Id 
-            /// </summary>
-            public string Id { get; set; }
+            public Guid Id { get; set; }
+            public string ClientId { get; set; }
+            public DateTime? DateTime { get; set; }
+            public MessageType Type { get; set; }
+            public string MessageText { get; set; }
+            public string OperatorId { get; set; }
 
-            /// <summary>
-            /// Name ("Me" if message from Client(device), Name of support, if message from support) 
-            /// </summary>
-            public string Name { get; set; }
-
-            /// <summary>
-            /// Link to Supports avatar(if have)
-            /// </summary>
-            public string AvatarLink { get; set; }
-
-            /// <summary>
-            /// Message creation time UTC
-            /// </summary>
-            public DateTime DateTimeUtc { get; set; }
-
-            /// <summary>
-            /// Message Text
-            /// </summary>
-            public string Text { get; set; }
+            public string TicketId { get; set; }
         }
 
         /// <summary>
@@ -146,6 +119,11 @@ namespace Dome{
                 // Server Response with Associated DomeClientId on class init
                 if (domeClientId == null) throw new ArgumentNullException("domeClientId");
                 DomeClientId = domeClientId;
+                //Get previous conversation log
+                var messages = ApiHttpGetCall<List<TicketConversationLog>>("messages", new NameValueCollection{{"domeClientId", DomeClientId}});
+
+                if (OnConversationLogReceived != null)
+                    OnConversationLogReceived(messages);
             });
 
 
@@ -166,23 +144,49 @@ namespace Dome{
 
         private T ApiHttpPostCall<T>(string method, NameValueCollection parameters){
             using (var wc = new WebClient()){
-                // Set security headers for API request
-                wc.Headers.Add("X-DOME-APIID", ApiId);
-                wc.Headers.Add("X-DOME-APIKEY", ApiKey);
-
+                // Set security headers for API request 
+                ApplySecurityHeaders(wc);
                 // Make POST request with parameters
                 var response = wc.UploadValues(string.Format("{0}/{1}", DomeApiEndpoint, method), parameters);
                 // Byte to string
                 var data = Encoding.Default.GetString(response);
-
                 // Deserialize response into class
                 return JsonConvert.DeserializeObject<T>(data);
             }
+        }
+
+        private T ApiHttpGetCall<T>(string method, NameValueCollection parameters){
+            using (var wc = new WebClient()){
+                // Set security headers for API request 
+                ApplySecurityHeaders(wc);
+
+                var url = string.Format("{0}/{1}?{2}", DomeApiEndpoint, method, ToQueryString(parameters));
+
+                var response = wc.DownloadString(url);
+
+                return JsonConvert.DeserializeObject<T>(response);
+            }
+        }
+
+        public static string ToQueryString(NameValueCollection parameters){
+            var items = parameters.AllKeys.SelectMany(parameters.GetValues, (k, v) => k + "=" + HttpUtility.UrlEncode(v)).ToArray();
+            return string.Join("&", items);
+        }
+
+
+        private void ApplySecurityHeaders(WebClient webClient){
+            webClient.Headers.Add("X-DOME-APIID", ApiId);
+            webClient.Headers.Add("X-DOME-APIKEY", ApiKey);
         }
 
         /// <summary>
         /// Event Delegate, Triggering, when new message from Support received
         /// </summary>
         public event Action<string> OnMessage;
+
+        /// <summary>
+        /// Event Delegate, Triggering, when new message from Support received
+        /// </summary>
+        public event Action<List<TicketConversationLog>> OnConversationLogReceived;
     }
 }
