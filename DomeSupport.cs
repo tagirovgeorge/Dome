@@ -17,22 +17,17 @@ namespace Dome{
         /// <summary>
         /// Hub Instance
         /// </summary>
-        private IHubProxy HubProxy { get; }
-
+        private IHubProxy HubProxy { get; }  
         /// <summary>
         /// Hub Connection 
         /// </summary>
-        private HubConnection HubConnection { get; }
-
+        private HubConnection HubConnection { get; }     
         /// <summary>
         /// DomeClientId (Based on Device Id and Push Token)
         /// </summary>
-        private string DomeClientId { get; set; }
-
-        private string ApiId { get; }
-
-        private string ApiKey { get; }
-
+        private string DomeClientId { get; set; }   
+        private string ApiId { get; }     
+        private string ApiKey { get; }  
         /// <summary>
         /// API Endpoint configuration
         /// </summary>
@@ -63,7 +58,6 @@ namespace Dome{
             public MessageType Type { get; set; }
             public string MessageText { get; set; }
             public string OperatorId { get; set; }
-
             public string TicketId { get; set; }
         }
 
@@ -88,12 +82,17 @@ namespace Dome{
             ApiId = apiId;
             ApiKey = apiKey;
 
+            // Getting DomeClientId, based on DeviceId + PushToken
             DomeClientId = ApiHttpPostCall<string>("client", new NameValueCollection{{"deviceId", deviceId}, {"pushToken", pushToken}});
+            // Get last conversation log from server
             Conversation = ApiHttpGetCall<List<TicketConversationLog>>("messages", new NameValueCollection { { "domeClientId", DomeClientId } });
 
+            // Setting up SignalR
             HubConnection = new HubConnection("https://dome.support/signalr", false){
-                TraceLevel = TraceLevels.All,
+#if DEBUG
+                TraceLevel = TraceLevels.All, 
                 TraceWriter = Console.Out
+#endif  
             };
 
             HubProxy = HubConnection.CreateHubProxy("chat");
@@ -114,6 +113,7 @@ namespace Dome{
             catch (ObjectDisposedException objectDisposedException){
                 throw new ObjectDisposedException("Could not start SignalR connection to server", objectDisposedException);
             }
+
 
             HubProxy.On("SupportResponse", message =>{
                 // Server Response with new Message from Support service
@@ -148,11 +148,9 @@ namespace Dome{
             using (var wc = new WebClient()){
                 // Set security headers for API request 
                 ApplySecurityHeaders(wc);
-
-                var url = string.Format("{0}/{1}?{2}", DomeApiEndpoint, method, ToQueryString(parameters));
-
-                var response = wc.DownloadString(url);
-
+                // Make POST request with parameters
+                var response = wc.DownloadString(string.Format("{0}/{1}?{2}", DomeApiEndpoint, method, ToQueryString(parameters)));
+                // Deserialize response into class
                 return JsonConvert.DeserializeObject<T>(response);
             }
         }
