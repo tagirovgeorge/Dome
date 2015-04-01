@@ -80,7 +80,6 @@ namespace Dome{
         /// <exception cref="ArgumentException">An element with the same key already exists in the <see cref="T:System.Collections.Generic.IDictionary`2" />.</exception>
         /// <exception cref="NotSupportedException">Security Headers setting error</exception>
         /// <exception cref="ObjectDisposedException">Could not start SignalR connection to server</exception>
-        /// <exception cref="AggregateException">The <see cref="T:System.Threading.Tasks.Task" /> was canceled -or- an exception was thrown during the execution of the <see cref="T:System.Threading.Tasks.Task" />. If the task was canceled, the <see cref="T:System.AggregateException" /> contains an <see cref="T:System.OperationCanceledException" /> in its <see cref="P:System.AggregateException.InnerExceptions" /> collection.</exception>
         public DomeSupport(string apiId, string apiKey, string deviceId, string pushToken){
             if (apiId == null) throw new ArgumentNullException("apiId");
             if (apiKey == null) throw new ArgumentNullException("apiKey");
@@ -88,6 +87,9 @@ namespace Dome{
 
             ApiId = apiId;
             ApiKey = apiKey;
+
+            DomeClientId = ApiHttpPostCall<string>("client", new NameValueCollection{{"deviceId", deviceId}, {"pushToken", pushToken}});
+            Conversation = ApiHttpGetCall<List<TicketConversationLog>>("messages", new NameValueCollection { { "domeClientId", DomeClientId } });
 
             HubConnection = new HubConnection("https://dome.support/signalr", false){
                 TraceLevel = TraceLevels.All,
@@ -99,6 +101,7 @@ namespace Dome{
             try{
                 HubConnection.Headers.Add("X-DOME-APIID", apiId);
                 HubConnection.Headers.Add("X-DOME-APIKEY", apiKey);
+                HubConnection.Headers.Add("X-DOME-CLIENT", DomeClientId);
             }
             catch (NotSupportedException notSupportedException){
                 throw new NotSupportedException("Security headers setting error", notSupportedException);
@@ -106,31 +109,17 @@ namespace Dome{
 
             //Start SignalR connection to Hub
             try{
-                HubConnection.Start().ContinueWith(task => {
-                    if (!task.IsFaulted) HubProxy.Invoke("HelloMyNameIs", deviceId, pushToken);
-                }).Wait();
+                HubConnection.Start();
             }
             catch (ObjectDisposedException objectDisposedException){
                 throw new ObjectDisposedException("Could not start SignalR connection to server", objectDisposedException);
             }
 
-            // Server Request Methods
-            HubProxy.On("HelloMyNameIsResponse", domeClientId =>{
-                // Server Response with Associated DomeClientId on class init
-                if (domeClientId == null) throw new ArgumentNullException("domeClientId");
-                DomeClientId = domeClientId;
-                //Get previous conversation log
-                var messages = ApiHttpGetCall<List<TicketConversationLog>>("messages", new NameValueCollection{{"domeClientId", DomeClientId}});
-
-                if (OnConversationLogReceived != null)
-                    OnConversationLogReceived(messages);
-            });
-
-
             HubProxy.On("SupportResponse", message =>{
                 // Server Response with new Message from Support service
+                var deserialized = JsonConvert.DeserializeObject<TicketConversationLog>(message);
                 if (OnMessage != null)
-                    OnMessage(message);
+                    OnMessage(deserialized);
             });
         }
 
@@ -168,7 +157,7 @@ namespace Dome{
             }
         }
 
-        public static string ToQueryString(NameValueCollection parameters){
+        private static string ToQueryString(NameValueCollection parameters){
             var items = parameters.AllKeys.SelectMany(parameters.GetValues, (k, v) => k + "=" + HttpUtility.UrlEncode(v)).ToArray();
             return string.Join("&", items);
         }
@@ -182,11 +171,6 @@ namespace Dome{
         /// <summary>
         /// Event Delegate, Triggering, when new message from Support received
         /// </summary>
-        public event Action<string> OnMessage;
-
-        /// <summary>
-        /// Event Delegate, Triggering, when new message from Support received
-        /// </summary>
-        public event Action<List<TicketConversationLog>> OnConversationLogReceived;
+        public event Action<TicketConversationLog> OnMessage;
     }
 }
